@@ -75,7 +75,7 @@ def save_raw_payload(
     period: str,
 ) -> Path:
     output_directory.mkdir( # create folder if it doesn't exist
-        parents=True, # parent folders should also be created
+        parents=True, # parent folders are also created
         exist_ok=True, # if file already exists, do not give error
     )
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") # get ts for naming the file
@@ -97,3 +97,5 @@ def save_raw_payload(
         )
     print('Saved raw response to:')
     print(output_path)
+
+    return output_path

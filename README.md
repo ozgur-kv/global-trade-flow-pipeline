@@ -30,3 +30,30 @@ UN Comtrade API
 → DuckDB staging and analytical model
 → SQL marts
 → Streamlit dashboard
+```
+
+## Current Status
+
+Completed:
+
+- repository and environment setup
+- first public UN Comtrade request
+- multiple requests handling
+- JSON response and record inspection
+- timestamped raw JSON storage
+- reusable public-preview extraction functions
+
+The current extractor uses the public preview endpoint and is intended
+for development and structural exploration.
+
+## Repository Structure
+
+```text
+notebooks/01_api_exploration.ipynb
+→ API exploration, source interpretation and grain analysis
+
+src/extract.py
+→ reusable request validation and raw-payload saving
+
+data/raw/
+→ local source responses, excluded from Git

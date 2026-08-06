@@ -1,3 +1,4 @@
 requests
 pandas
 jupyter
+python-dotenv

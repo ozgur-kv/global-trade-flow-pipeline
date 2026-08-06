@@ -1,6 +1,11 @@
 # Input: UN Comtrade request parameters
 # Process: Build endpoint --> Send GET request --> Validate HTTP response --> Parse and validate payload
 # Output: Complete payload dictionary
+# We need the intended behavior to be parametric:
+# no subscription key
+# → public preview API
+# subscription key provided
+# → authenticated final-data API
 
 from typing import Any
 import requests
@@ -8,7 +13,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-BASE_URL = "https://comtradeapi.un.org/public/v1/preview"
+# BASE_URL = "https://comtradeapi.un.org/public/v1/preview"
+
+PREVIEW_BASE_URL = "https://comtradeapi.un.org/public/v1/preview"
+FINAL_DATA_BASE_URL = "https://comtradeapi.un.org/data/v1/get"
 
 def fetch_trade_data(
         *, # every parameter after * must be passed with name
@@ -20,11 +28,15 @@ def fetch_trade_data(
         partner_code: str,
         commodity_code: str,
         flow_code: str,
+        subscription_key: str | None = None, # either a string or None
+        max_records: int = 500, # we can adjust this to get more data per call
         timeout: int = 30,
 ) -> dict[str, Any]: # keys are strings, values can be different types
+    # select base url based on subscription key availability
+    base_url = FINAL_DATA_BASE_URL if subscription_key else PREVIEW_BASE_URL
     # create the url with required path parameters
     url = (
-        f"{BASE_URL}/"
+        f"{base_url}/"
         f"{type_code}/"
         f"{frequency_code}/"
         f"{classification_code}"
@@ -36,10 +48,13 @@ def fetch_trade_data(
         'partnerCode': partner_code,
         'cmdCode': commodity_code,
         'flowCode': flow_code,
-        'maxRecords': 500,
+        'maxRecords': max_records,
         'breakdownMode': 'classic', # or 'plus' for extended breakdown dimensions
         'includeDesc': 'true',
     }
+    # add subscription key to query parameters if it exists
+    if subscription_key:
+        params["subscription-key"] = subscription_key
     # get the response
     response = requests.get(
         url,

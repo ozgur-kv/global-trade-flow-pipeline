@@ -17,6 +17,7 @@ from pathlib import Path
 
 PREVIEW_BASE_URL = "https://comtradeapi.un.org/public/v1/preview"
 FINAL_DATA_BASE_URL = "https://comtradeapi.un.org/data/v1/get"
+METADATA_BASE_URL = "https://comtradeapi.un.org/data/v1/getMetadata"
 
 def fetch_trade_data(
         *, # every parameter after * must be passed with name
@@ -114,3 +115,44 @@ def save_raw_payload(
     print(output_path)
 
     return output_path
+
+def fetch_trade_metadata(
+    *,
+    type_code: str,
+    frequency_code: str,
+    classification_code: str,
+    period: str,
+    reporter_code: str,
+    subscription_key: str,
+    show_history: bool = False, # return only current metadata or show historical versions
+    timeout: int = 30,
+) -> dict[str, Any]:
+    url = (
+        f"{METADATA_BASE_URL}/"
+        f"{type_code}/"
+        f"{frequency_code}/"
+        f"{classification_code}"
+    )
+    params = {
+        "period": period,
+        "reporterCode": reporter_code,
+        "showHistory": str(show_history).lower(), # because the API expects something like 'true' or 'false'
+        "subscription-key": subscription_key,
+    }
+    response = requests.get(
+        url,
+        params=params,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise TypeError(
+            "Metadata response is expected to be a dictionary."
+        )
+    api_error = payload.get("error")
+    if api_error:
+        raise ValueError(
+            f"UN Comtrade returned a metadata error: {api_error}"
+        )
+    return payload

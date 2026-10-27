@@ -49,6 +49,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.pytest_tmp/
 cover/
 
 # Translations
@@ -181,5 +182,7 @@ cython_debug/
 .cursorindexingignore
 
 # Project Specific Additions
-# Local raw API responses
-data/raw/*.json
+# Local API responses and persisted request-budget state
+data/raw/**
+!data/raw/.gitkeep
+data/state/

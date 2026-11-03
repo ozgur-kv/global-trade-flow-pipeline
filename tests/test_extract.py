@@ -157,6 +157,104 @@ def test_preview_mode_defaults_to_500(tmp_path: Path, query: TradeQuery) -> None
     assert "subscription-key" not in call["params"]
 
 
+def test_partner_none_is_accepted_and_omitted(
+    tmp_path: Path, query: TradeQuery
+) -> None:
+    session = FakeSession([FakeResponse(payload())])
+    client, _ = make_client(make_settings(tmp_path, api_key="secret"), session)
+
+    client.fetch_trade_data(replace(query, partner_code=None))
+
+    assert "partnerCode" not in session.calls[0]["params"]
+
+
+@pytest.mark.parametrize("partner_code", ["0", "842", "842,156,251"])
+def test_explicit_partner_codes_are_preserved(
+    tmp_path: Path, query: TradeQuery, partner_code: str
+) -> None:
+    session = FakeSession([FakeResponse(payload())])
+    client, _ = make_client(make_settings(tmp_path, api_key="secret"), session)
+
+    client.fetch_trade_data(replace(query, partner_code=partner_code))
+
+    assert session.calls[0]["params"]["partnerCode"] == partner_code
+
+
+@pytest.mark.parametrize(
+    "partner_code",
+    ["", " ", "all", "ALL", "842,", ",842", "842,,156", "842, 156", "DEU", 842],
+)
+def test_invalid_partner_codes_fail_before_http(
+    tmp_path: Path, query: TradeQuery, partner_code: Any
+) -> None:
+    session = FakeSession()
+    client, _ = make_client(make_settings(tmp_path, api_key="secret"), session)
+
+    with pytest.raises(ValueError, match="partner_code"):
+        invalid_query = replace(query, partner_code=partner_code)
+        client.fetch_trade_data(invalid_query)
+
+    assert session.calls == []
+    assert not client.settings.budget_state_path.exists()
+
+
+def test_partner_filter_variants_have_distinct_fingerprints(
+    tmp_path: Path, query: TradeQuery
+) -> None:
+    client, _ = make_client(
+        make_settings(tmp_path, api_key="secret"), FakeSession()
+    )
+
+    fingerprints = {
+        client.request_fingerprint(replace(query, partner_code=None)),
+        client.request_fingerprint(replace(query, partner_code="0")),
+        client.request_fingerprint(replace(query, partner_code="842,156")),
+    }
+
+    assert len(fingerprints) == 3
+
+
+def test_existing_explicit_partner_fingerprint_is_stable(
+    tmp_path: Path, query: TradeQuery
+) -> None:
+    client, _ = make_client(
+        make_settings(tmp_path, api_key="secret"), FakeSession()
+    )
+    existing_query = replace(
+        query,
+        period="202301,202302,202303",
+        partner_code="0",
+        flow_code="M,X",
+        max_records=20,
+    )
+
+    assert client.request_fingerprint(existing_query) == (
+        "b4791db21a980b2209840e393ab881fc43d516b78d2dad5ac669ea7e9a206339"
+    )
+
+
+def test_omitted_partner_cache_is_separate_from_explicit_partner_cache(
+    tmp_path: Path, query: TradeQuery
+) -> None:
+    session = FakeSession(
+        [
+            FakeResponse(payload([{"scope": "omitted"}])),
+            FakeResponse(payload([{"scope": "world"}])),
+        ]
+    )
+    client, _ = make_client(make_settings(tmp_path, api_key="secret"), session)
+    omitted_query = replace(query, partner_code=None)
+
+    omitted = client.download_trade_data(omitted_query)
+    world = client.download_trade_data(query)
+    cached_omitted = client.download_trade_data(omitted_query)
+
+    assert omitted.payload_path != world.payload_path
+    assert cached_omitted.from_cache is True
+    assert cached_omitted.payload_path == omitted.payload_path
+    assert len(session.calls) == 2
+
+
 def test_mode_specific_record_limits(tmp_path: Path, query: TradeQuery) -> None:
     authenticated, _ = make_client(
         make_settings(tmp_path, api_key="secret"), FakeSession()
@@ -320,6 +418,126 @@ def test_non_retryable_error_is_sanitized(
     assert "401" in str(captured.value)
     assert secret not in str(captured.value)
     assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("error_payload", "expected"),
+    [
+        ({"error": "Invalid partnerCode."}, "Invalid partnerCode"),
+        ({"message": "Request validation failed."}, "Request validation failed"),
+        (
+            {"errors": {"partnerCode": ["Must contain numeric codes."]}},
+            "partnerCode: Must contain numeric codes",
+        ),
+        (
+            {"error": {"code": "BadRequest", "message": "Invalid selection."}},
+            "Invalid selection",
+        ),
+    ],
+)
+def test_structured_http_errors_include_safe_diagnostics(
+    tmp_path: Path,
+    query: TradeQuery,
+    error_payload: dict[str, Any],
+    expected: str,
+) -> None:
+    session = FakeSession([FakeResponse(error_payload, status_code=400)])
+    client, _ = make_client(make_settings(tmp_path, api_key="secret"), session)
+
+    with pytest.raises(ComtradeError) as captured:
+        client.fetch_trade_data(query)
+
+    assert "HTTP 400" in str(captured.value)
+    assert expected in str(captured.value)
+    assert len(session.calls) == 1
+    state = json.loads(client.settings.budget_state_path.read_text(encoding="utf-8"))
+    assert state["attempts_used"] == 1
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        FakeResponse({}, status_code=400),
+        FakeResponse([], status_code=400),
+        FakeResponse(None, status_code=400),
+        FakeResponse(status_code=400, json_error=ValueError("not json")),
+    ],
+)
+def test_unusable_http_error_bodies_fall_back_to_generic_message(
+    tmp_path: Path, query: TradeQuery, response: FakeResponse
+) -> None:
+    client, _ = make_client(
+        make_settings(tmp_path, api_key="secret"), FakeSession([response])
+    )
+
+    with pytest.raises(ComtradeError) as captured:
+        client.fetch_trade_data(query)
+
+    assert str(captured.value) == "UN Comtrade trade request failed with HTTP 400."
+
+
+def test_http_error_diagnostics_are_bounded(
+    tmp_path: Path, query: TradeQuery
+) -> None:
+    session = FakeSession([FakeResponse({"message": "x" * 2_000}, status_code=400)])
+    client, _ = make_client(make_settings(tmp_path, api_key="secret"), session)
+
+    with pytest.raises(ComtradeError) as captured:
+        client.fetch_trade_data(query)
+
+    diagnostic = str(captured.value).split(": ", maxsplit=1)[1]
+    assert len(diagnostic) == 500
+    assert diagnostic.endswith("...")
+
+
+def test_http_error_diagnostics_redact_credentials_and_urls(
+    tmp_path: Path, query: TradeQuery
+) -> None:
+    secret = "private-subscription-key"
+    message = (
+        f"subscription-key={secret}; authorization: Bearer another-secret; "
+        f"client_secret: third-secret; "
+        f"request https://example.test/data?subscription-key={secret}"
+    )
+    session = FakeSession([FakeResponse({"message": message}, status_code=400)])
+    client, _ = make_client(make_settings(tmp_path, api_key=secret), session)
+
+    with pytest.raises(ComtradeError) as captured:
+        client.fetch_trade_data(query)
+
+    error_message = str(captured.value)
+    assert secret not in error_message
+    assert "another-secret" not in error_message
+    assert "third-secret" not in error_message
+    assert "https://" not in error_message
+    assert "[REDACTED]" in error_message
+    assert "[URL REDACTED]" in error_message
+
+
+def test_final_retryable_error_includes_safe_diagnostic(
+    tmp_path: Path, query: TradeQuery
+) -> None:
+    session = FakeSession(
+        [
+            FakeResponse({"message": "temporary"}, status_code=500),
+            FakeResponse({"message": "temporary"}, status_code=500),
+            FakeResponse({"message": "temporary"}, status_code=500),
+            FakeResponse({"message": "service unavailable"}, status_code=500),
+        ]
+    )
+    client, clock = make_client(
+        make_settings(tmp_path, api_key="secret", interval=0.1), session
+    )
+
+    with pytest.raises(ComtradeError) as captured:
+        client.fetch_trade_data(query)
+
+    assert "HTTP 500 after 4 attempts" in str(captured.value)
+    assert "service unavailable" in str(captured.value)
+    assert len(session.calls) == 4
+    assert clock.sleeps == [1, 2, 4]
+    state = json.loads(client.settings.budget_state_path.read_text(encoding="utf-8"))
+    assert state["attempts_used"] == 4
 
 
 def test_api_error_redacts_key(tmp_path: Path, query: TradeQuery) -> None:
@@ -598,7 +816,7 @@ def test_compatibility_wrapper_builds_the_new_query(
         classification_code="HS",
         period="202301",
         reporter_code="276",
-        partner_code="0",
+        partner_code=None,
         commodity_code="TOTAL",
         flow_code="X",
         max_records=25,
@@ -606,4 +824,5 @@ def test_compatibility_wrapper_builds_the_new_query(
 
     assert result["count"] == 1
     assert captured["settings"] == settings
+    assert captured["query"].partner_code is None
     assert captured["query"].max_records == 25

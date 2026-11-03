@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
 from typing import Any
@@ -27,6 +28,7 @@ AUTHENTICATED_MAX_RECORDS = 100_000
 MAX_ATTEMPTS = 4
 MAX_RETRY_WAIT_SECONDS = 60.0
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+MAX_HTTP_DIAGNOSTIC_CHARS = 500
 SNAPSHOT_METADATA_VERSION = 1
 BUDGET_STATE_VERSION = 1
 
@@ -43,7 +45,7 @@ class TradeQuery:
     classification_code: str # e.g. HS for Harmonized System classification
     period: str # e.g. 202301
     reporter_code: str # e.g. 276 for Germany
-    partner_code: str # e.g. 0 for World, all trading partners aggregated
+    partner_code: str | None # e.g. 0 for World; None omits the partner filter
     commodity_code: str # e.g. TOTAL for All commodities
     flow_code: str # e.g. X for Exports
     max_records: int | None = None # e.g. 1000 for Maximum returned records
@@ -62,13 +64,20 @@ class TradeQuery:
             "classification_code": self.classification_code,
             "period": self.period,
             "reporter_code": self.reporter_code,
-            "partner_code": self.partner_code,
             "commodity_code": self.commodity_code,
             "flow_code": self.flow_code,
         }
         for name, value in required.items():
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must be a non-empty string.")
+
+        if self.partner_code is not None and (
+            not isinstance(self.partner_code, str)
+            or re.fullmatch(r"[0-9]+(?:,[0-9]+)*", self.partner_code) is None
+        ):
+            raise ValueError(
+                "partner_code must be None or comma-separated numeric codes."
+            )
 
         if self.type_code not in {"C", "S"}:
             raise ValueError("type_code must be 'C' or 'S'.")
@@ -279,7 +288,6 @@ class ComtradeClient:
         params: dict[str, Any] = {
             "period": query.period,
             "reporterCode": query.reporter_code,
-            "partnerCode": query.partner_code,
             "cmdCode": query.commodity_code,
             "flowCode": query.flow_code,
             "maxRecords": max_records,
@@ -287,6 +295,7 @@ class ComtradeClient:
             "includeDesc": str(query.include_descriptions).lower(),
         }
         optional_params = {
+            "partnerCode": query.partner_code,
             "partner2Code": query.partner2_code,
             "customsCode": query.customs_code,
             "motCode": query.mode_of_transport_code,
@@ -335,8 +344,12 @@ class ComtradeClient:
             if response.status_code in RETRYABLE_STATUS_CODES:
                 if attempt_index == MAX_ATTEMPTS - 1:
                     raise ComtradeError(
-                        f"UN Comtrade {request_kind} request failed with HTTP "
-                        f"{response.status_code} after {MAX_ATTEMPTS} attempts."
+                        _http_error_message(
+                            request_kind,
+                            response,
+                            self.settings.api_key,
+                            attempts=MAX_ATTEMPTS,
+                        )
                     ) from None
                 retry_after = _retry_after_seconds(
                     response.headers.get("Retry-After"), self._utc_now()
@@ -348,8 +361,9 @@ class ComtradeClient:
 
             if response.status_code >= 400:
                 raise ComtradeError(
-                    f"UN Comtrade {request_kind} request failed with HTTP "
-                    f"{response.status_code}."
+                    _http_error_message(
+                        request_kind, response, self.settings.api_key
+                    )
                 ) from None
 
             try:
@@ -621,6 +635,111 @@ def _fingerprint(descriptor: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _http_error_message(
+    request_kind: str,
+    response: requests.Response,
+    api_key: str | None,
+    *,
+    attempts: int | None = None,
+) -> str:
+    message = (
+        f"UN Comtrade {request_kind} request failed with HTTP "
+        f"{response.status_code}"
+    )
+    if attempts is not None:
+        message += f" after {attempts} attempts"
+    detail = _safe_http_error_detail(response, api_key)
+    return f"{message}: {detail}" if detail else f"{message}."
+
+
+def _safe_http_error_detail(
+    response: requests.Response, api_key: str | None
+) -> str | None:
+    """Extract a bounded diagnostic from allowlisted structured fields."""
+
+    try:
+        payload = response.json()
+    except (ValueError, requests.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    fragments: list[str] = []
+
+    def collect(
+        value: Any,
+        *,
+        label: str | None = None,
+        validation: bool = False,
+        depth: int = 0,
+    ) -> None:
+        if len(fragments) >= 5 or depth > 2:
+            return
+        if isinstance(value, str):
+            value = value.strip()
+            if value:
+                fragments.append(f"{label}: {value}" if label else value)
+            return
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            fragments.append(f"{label}: {value}" if label else str(value))
+            return
+        if isinstance(value, list):
+            for item in value[:5]:
+                collect(
+                    item,
+                    label=label,
+                    validation=validation,
+                    depth=depth + 1,
+                )
+            return
+        if not isinstance(value, dict):
+            return
+        if validation:
+            for field, item in list(value.items())[:5]:
+                collect(
+                    item,
+                    label=str(field),
+                    validation=True,
+                    depth=depth + 1,
+                )
+            return
+        for field in ("message", "detail", "error", "title", "code"):
+            if field in value:
+                collect(value[field], depth=depth + 1)
+
+    for field in ("error", "message", "detail", "title"):
+        if field in payload:
+            collect(payload[field])
+    for field in ("errors", "validationErrors", "validation_details"):
+        if field in payload:
+            collect(payload[field], validation=True)
+
+    unique_fragments = list(dict.fromkeys(fragments))
+    if not unique_fragments:
+        return None
+
+    diagnostic = " ".join("; ".join(unique_fragments).split())
+    if api_key:
+        diagnostic = diagnostic.replace(api_key, "[REDACTED]")
+    diagnostic = re.sub(
+        r"(?i)\b(subscription[-_ ]?key|api[-_ ]?key|authorization|"
+        r"access[-_ ]?token|token|client[-_ ]?secret|password|credential)"
+        r"\b\s*[:=]\s*[^,;]+",
+        lambda match: f"{match.group(1)}=[REDACTED]",
+        diagnostic,
+    )
+    diagnostic = re.sub(
+        r"(?i)\bbearer\s+[^,;\s]+", "Bearer [REDACTED]", diagnostic
+    )
+    diagnostic = re.sub(r"https?://\S+", "[URL REDACTED]", diagnostic)
+    diagnostic = diagnostic.strip()
+    if not diagnostic:
+        return None
+    if len(diagnostic) > MAX_HTTP_DIAGNOSTIC_CHARS:
+        diagnostic = diagnostic[: MAX_HTTP_DIAGNOSTIC_CHARS - 3].rstrip() + "..."
+    return diagnostic
+
+
 def _retry_after_seconds(value: str | None, now: datetime) -> float | None:
     if value is None:
         return None
@@ -693,7 +812,7 @@ def fetch_trade_data(
     classification_code: str,
     period: str,
     reporter_code: str,
-    partner_code: str,
+    partner_code: str | None,
     commodity_code: str,
     flow_code: str,
     subscription_key: str | None = None,

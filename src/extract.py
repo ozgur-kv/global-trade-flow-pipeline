@@ -1,7 +1,6 @@
 """Reliable extraction and raw snapshot storage for UN Comtrade."""
 
 from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -14,9 +13,7 @@ import tempfile
 import time
 from typing import Any
 import warnings
-
 import requests
-
 from src.config import ComtradeSettings
 
 
@@ -37,20 +34,19 @@ BUDGET_STATE_VERSION = 1
 class ComtradeError(RuntimeError):
     """Raised when a Comtrade request or local extraction safeguard fails."""
 
-
+# TradeQuery dataclass is used for building a specific request for trade data.
 @dataclass(frozen=True, slots=True)
 class TradeQuery:
-    """Parameters that define a UN Comtrade trade-data response."""
-
-    type_code: str
-    frequency_code: str
-    classification_code: str
-    period: str
-    reporter_code: str
-    partner_code: str
-    commodity_code: str
-    flow_code: str
-    max_records: int | None = None
+    # Parameters that define a UN Comtrade trade-data response.
+    type_code: str # e.g. C for Commodities, S for Services
+    frequency_code: str # e.g. M for Monthly frequency
+    classification_code: str # e.g. HS for Harmonized System classification
+    period: str # e.g. 202301
+    reporter_code: str # e.g. 276 for Germany
+    partner_code: str # e.g. 0 for World, all trading partners aggregated
+    commodity_code: str # e.g. TOTAL for All commodities
+    flow_code: str # e.g. X for Exports
+    max_records: int | None = None # e.g. 1000 for Maximum returned records
     partner2_code: str | None = None
     customs_code: str | None = None
     mode_of_transport_code: str | None = None
@@ -58,6 +54,7 @@ class TradeQuery:
     include_descriptions: bool = True
     aggregate_by: str | None = None
 
+    # Validate the fields, e.g. type_code will be rejected if not in {'C', 'S'}
     def __post_init__(self) -> None:
         required = {
             "type_code": self.type_code,
@@ -113,10 +110,10 @@ class ExtractionResult:
     possibly_truncated: bool
     warning_codes: tuple[str, ...]
 
-
+# Object responsible for communicating with UN Comtrade API
+# Instead of creating new HTTP request for every notebook, we will utilize this reusable client.
 class ComtradeClient:
     """Authenticated-first client with retries, pacing, quota, and caching."""
-
     def __init__(
         self,
         settings: ComtradeSettings,
@@ -243,6 +240,7 @@ class ComtradeClient:
         _warn_if_truncated(possibly_truncated, warning_codes)
         return result
 
+    # Construct endpoint and parameters
     def _prepare_trade_request(
         self, query: TradeQuery
     ) -> tuple[dict[str, Any], int]:
@@ -306,6 +304,7 @@ class ComtradeClient:
         }
         return descriptor, max_records
 
+    # Send requests, retry failures and parse JSON
     def _request_json(
         self, *, request_kind: str, url: str, params: dict[str, Any]
     ) -> dict[str, Any]:
@@ -368,6 +367,7 @@ class ComtradeClient:
 
         raise AssertionError("Retry loop exited unexpectedly.")
 
+    # Enforce pacing between attempts
     def _wait_for_request_interval(self) -> None:
         if self._last_attempt_started is None:
             return
@@ -376,6 +376,7 @@ class ComtradeClient:
         if remaining > 0:
             self._sleep(remaining)
 
+    # Protect the daily API allowance
     def _consume_daily_budget(self) -> None:
         path = self.settings.budget_state_path
         today = _as_utc(self._utc_now()).date().isoformat()
@@ -421,6 +422,7 @@ class ComtradeClient:
         }
         _atomic_write_json(path, new_state)
 
+    # Look for reusable local data
     def _find_cached_snapshot(
         self,
         output_directory: Path,
@@ -448,6 +450,7 @@ class ComtradeClient:
                 return result
         return None
 
+    # Verify cached files are consistent
     def _validate_cached_snapshot(
         self,
         payload_path: Path,
@@ -499,6 +502,7 @@ class ComtradeClient:
             warning_codes=warning_codes,
         )
 
+    # Save new raw data and metadata
     def _write_snapshot(
         self,
         *,

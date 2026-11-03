@@ -1,11 +1,9 @@
 """Environment-backed configuration for UN Comtrade extraction."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 import os
 from pathlib import Path
-
 from dotenv import load_dotenv
 
 
@@ -38,10 +36,12 @@ def _positive_int(name: str, default: int) -> int:
         raise ValueError(f"{name} must be greater than zero.")
     return value
 
-
+# frozen=True to prevent reassignment of dataclass fields after creation
+# slots=True to restrict instances to declared attributes
 @dataclass(frozen=True, slots=True)
 class ComtradeSettings:
-    """Runtime settings with conservative defaults for the free API tier."""
+    # Runtime settings with conservative defaults for the free API tier.
+    # dataclass is used to store all API related information in a single object
 
     api_key: str | None = None
     raw_dir: Path = PROJECT_ROOT / "data" / "raw"
@@ -63,7 +63,7 @@ class ComtradeSettings:
     @classmethod
     def from_env(cls, env_file: Path | None = None) -> "ComtradeSettings":
         """Load settings without overriding values already in the environment."""
-
+        # load .env to read API key
         load_dotenv(dotenv_path=env_file or PROJECT_ROOT / ".env", override=False)
         api_key = os.getenv("COMTRADE_API_KEY")
         if api_key is not None:

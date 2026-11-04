@@ -16,6 +16,13 @@ from typing import Any
 import warnings
 import requests
 from src.config import ComtradeSettings
+from src.snapshots import (
+    SNAPSHOT_METADATA_VERSION,
+    SnapshotValidationError,
+    completeness as snapshot_completeness,
+    request_fingerprint as snapshot_fingerprint,
+    validate_snapshot_pair,
+)
 
 
 PREVIEW_TRADE_BASE_URL = "https://comtradeapi.un.org/public/v1/preview"
@@ -29,7 +36,6 @@ MAX_ATTEMPTS = 4
 MAX_RETRY_WAIT_SECONDS = 60.0
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 MAX_HTTP_DIAGNOSTIC_CHARS = 500
-SNAPSHOT_METADATA_VERSION = 1
 BUDGET_STATE_VERSION = 1
 
 
@@ -474,46 +480,25 @@ class ComtradeClient:
         max_records: int,
     ) -> ExtractionResult | None:
         try:
-            payload_bytes = payload_path.read_bytes()
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            payload = json.loads(payload_bytes.decode("utf-8"))
-            records = _validate_payload(payload, "cached trade", None)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ComtradeError):
-            return None
-
-        possibly_truncated, warning_codes = _completeness(
-            payload, records, max_records
-        )
-        expected_status = (
-            "possibly_truncated" if possibly_truncated else "no_truncation_signal"
-        )
-        valid_metadata = (
-            isinstance(metadata, dict)
-            and metadata.get("schema_version") == SNAPSHOT_METADATA_VERSION
-            and metadata.get("request_fingerprint") == fingerprint
-            and metadata.get("request") == descriptor
-            and isinstance(metadata.get("retrieved_at_utc"), str)
-            and metadata.get("payload_sha256")
-            == hashlib.sha256(payload_bytes).hexdigest()
-            and metadata.get("record_count") == len(records)
-            and metadata.get("max_records") == max_records
-            and metadata.get("api_count") == payload.get("count")
-            and metadata.get("possibly_truncated") is possibly_truncated
-            and metadata.get("completeness_status") == expected_status
-            and metadata.get("warning_codes") == list(warning_codes)
-        )
-        if not valid_metadata:
+            snapshot = validate_snapshot_pair(
+                payload_path,
+                metadata_path,
+                expected_request=descriptor,
+                expected_fingerprint=fingerprint,
+                expected_max_records=max_records,
+            )
+        except SnapshotValidationError:
             return None
 
         return ExtractionResult(
-            payload=payload,
+            payload=snapshot.payload,
             payload_path=payload_path,
             metadata_path=metadata_path,
             from_cache=True,
-            record_count=len(records),
+            record_count=len(snapshot.records),
             max_records=max_records,
-            possibly_truncated=possibly_truncated,
-            warning_codes=warning_codes,
+            possibly_truncated=snapshot.possibly_truncated,
+            warning_codes=snapshot.warning_codes,
         )
 
     # Save new raw data and metadata
@@ -608,13 +593,7 @@ def _validate_payload(
 def _completeness(
     payload: dict[str, Any], records: list[Any], max_records: int
 ) -> tuple[bool, tuple[str, ...]]:
-    warning_codes: list[str] = []
-    if len(records) >= max_records:
-        warning_codes.append("MAX_RECORD_LIMIT_REACHED")
-    api_count = payload.get("count")
-    if isinstance(api_count, int) and api_count > len(records):
-        warning_codes.append("API_COUNT_EXCEEDS_RETURNED_RECORDS")
-    return bool(warning_codes), tuple(warning_codes)
+    return snapshot_completeness(payload, records, max_records)
 
 
 def _warn_if_truncated(
@@ -629,10 +608,7 @@ def _warn_if_truncated(
 
 
 def _fingerprint(descriptor: dict[str, Any]) -> str:
-    canonical = json.dumps(
-        descriptor, ensure_ascii=True, sort_keys=True, separators=(",", ":")
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return snapshot_fingerprint(descriptor)
 
 
 def _http_error_message(

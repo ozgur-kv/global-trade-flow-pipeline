@@ -186,3 +186,8 @@ cython_debug/
 data/raw/**
 !data/raw/.gitkeep
 data/state/
+data/warehouse/**
+!data/warehouse/.gitkeep
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp

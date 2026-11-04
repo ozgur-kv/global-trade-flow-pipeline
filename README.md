@@ -3,8 +3,8 @@
 A reproducible data-engineering portfolio project built around international
 merchandise-trade data from the UN Comtrade API.
 
-This first iteration focuses on a reliable extraction layer. Transformation,
-DuckDB modeling, orchestration, and presentation are intentionally deferred.
+The project now includes a reliable extraction layer and an offline,
+transactional DuckDB warehouse with version-controlled SQL transformations.
 
 ## Current capabilities
 
@@ -18,12 +18,17 @@ DuckDB modeling, orchestration, and presentation are intentionally deferred.
 - timestamped refresh snapshots with non-sensitive provenance metadata;
 - explicit warnings for responses that may have reached an API record limit;
 - offline pytest coverage using mocked API responses.
+- exact-manifest selection of immutable raw snapshots;
+- typed staging, reusable core facts and dimensions, and analytical SQL models;
+- atomic, idempotent DuckDB rebuilds with data-quality and reconciliation checks.
 
 The exploratory notebooks are preserved under `notebooks/`.
 
 ## Setup
 
 The project is verified with CPython 3.13.14.
+DuckDB 1.5.6 is pinned because it is the stable build verified with that local
+Python and Windows application-control environment.
 
 ```powershell
 python -m venv .venv
@@ -41,6 +46,8 @@ COMTRADE_REQUEST_INTERVAL_SECONDS=1.2
 COMTRADE_TIMEOUT_SECONDS=30
 COMTRADE_DAILY_REQUEST_BUDGET=100
 COMTRADE_BUDGET_STATE_PATH=data/state/comtrade_request_budget.json
+COMTRADE_WAREHOUSE_PATH=data/warehouse/trade.duckdb
+COMTRADE_INGESTION_MANIFEST=config/iteration2_manifest.json
 ```
 
 Process environment variables take precedence over values in `.env`.
@@ -132,6 +139,67 @@ is complete.
 This iteration does not implement pagination, automatic query splitting, bulk
 downloads, or async extraction.
 
+## Offline DuckDB warehouse
+
+The warehouse build never calls UN Comtrade. The committed manifest pins exact
+payload filenames, request fingerprints, checksums, request descriptors, and
+record counts under the configured `data/raw` directory. A missing, changed,
+truncated, or warned snapshot stops the build before the database is modified.
+
+Run the complete offline rebuild with:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.load
+```
+
+The loader validates all inputs first, then rebuilds every published table in
+one DuckDB transaction. Repeating the command against the same manifest is
+idempotent. Any SQL or quality-check failure rolls back the transaction and
+leaves the previously committed warehouse intact.
+
+The current manifest describes Germany's annual 2023–2024 imports and exports
+for HS chapters 84, 85, and 87. Its 12-partition and 2,412-row expectations are
+dataset-specific; the loader itself has no hardcoded reporter, period,
+frequency, commodity, partition-count, or row-count assumptions.
+
+### Data layers
+
+- **Raw:** immutable JSON payloads and metadata sidecars under `data/raw/`.
+- **Staging:** `staging.source_partitions` and typed
+  `staging.trade_observation` rows with source lineage.
+- **Core:** `core.fact_trade`, `core.dim_partner`, and `core.dim_product`.
+- **Analytics:** annual HS2 chapter balances, non-World partner-area analysis,
+  and extensible year-over-year comparisons.
+
+The fact grain includes reporter, type, frequency, original period, flow,
+classification version, commodity, partner, secondary partner, customs,
+transport, and supply mode. Annual and monthly periods therefore cannot collide.
+Monthly records are supported by staging and core schemas, but monthly marts are
+not part of this iteration.
+
+Monetary values use `DECIMAL(38,3)`. Request classification family (for example
+`HS`) and response classification version (for example `H6`) are stored
+separately. Analytics never merge classification revisions or commodity levels
+implicitly.
+
+`partnerCode=0` is classified as World. Every other value is deliberately
+called a non-World partner area; the project does not assume that every code is
+a sovereign country. World rows are excluded from partner rankings and used
+explicitly for chapter totals.
+
+### Manifest updates
+
+Manifest snapshot references must be plain relative filenames. Absolute paths,
+directory traversal, credential-shaped fields, authenticated query parameters,
+and endpoints containing query strings are rejected. A refreshed snapshot is
+not selected automatically: update its filename, fingerprint, checksum, request
+descriptor, record count, and dataset expectations only after reviewing it.
+
+The current reconciliation SQL compares the Notebook 04 chapter summaries with
+a USD 5,000,001 tolerance, reflecting the half-unit tolerance of values rounded
+to two decimal places in billions. It is selected by the dataset manifest and is
+not a universal loader assumption.
+
 ## Tests
 
 All automated tests are offline and use mocked responses.
@@ -150,6 +218,18 @@ src/config.py
 src/extract.py
   Query validation, API client, retries, safeguards, and raw snapshots
 
+src/snapshots.py
+  Shared immutable-snapshot integrity contract
+
+src/load.py
+  Offline manifest validation and transactional DuckDB build
+
+config/iteration2_manifest.json
+  Exact, credential-free dataset inputs
+
+sql/
+  Staging, core, analytics, quality, and dataset reconciliation models
+
 tests/
   Offline unit tests
 
@@ -164,10 +244,13 @@ data/raw/
 
 data/state/
   Ignored local request-budget state
+
+data/warehouse/
+  Ignored local DuckDB database and temporary files
 ```
 
 ## Planned later iterations
 
-Future work may add normalization, data-quality checks, DuckDB models, SQL
-marts, orchestration, and presentation. Those components are outside the scope
-of the current extraction iteration.
+Future work may add monthly analytical models, broader classification and
+partner reference data, orchestration, and presentation. Notebook 05 is not
+created in this iteration.

@@ -84,3 +84,30 @@ class ComtradeSettings:
                 "data/state/comtrade_request_budget.json",
             ),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class WarehouseSettings:
+    """Filesystem settings for the offline DuckDB build."""
+
+    raw_dir: Path = PROJECT_ROOT / "data" / "raw"
+    warehouse_path: Path = PROJECT_ROOT / "data" / "warehouse" / "trade.duckdb"
+    manifest_path: Path = PROJECT_ROOT / "config" / "iteration2_manifest.json"
+    sql_dir: Path = PROJECT_ROOT / "sql"
+
+    @classmethod
+    def from_env(cls, env_file: Path | None = None) -> "WarehouseSettings":
+        """Load warehouse paths without reading or exposing the API key."""
+
+        load_dotenv(dotenv_path=env_file or PROJECT_ROOT / ".env", override=False)
+        return cls(
+            raw_dir=_project_path(os.getenv("COMTRADE_RAW_DIR"), "data/raw"),
+            warehouse_path=_project_path(
+                os.getenv("COMTRADE_WAREHOUSE_PATH"),
+                "data/warehouse/trade.duckdb",
+            ),
+            manifest_path=_project_path(
+                os.getenv("COMTRADE_INGESTION_MANIFEST"),
+                "config/iteration2_manifest.json",
+            ),
+        )

@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "dataset_id": "germany_annual_hs2_2023_2024",
+  "expected_partition_count": 12,
+  "expected_record_count": 2412,
+  "reconciliation_sql": "reconciliation/germany_hs2_2023_2024.sql",
+  "partitions": [
+    {
+      "partition_id": "2023_M_84",
+      "payload_file": "comtrade_trade_5292c5c4d813cb8f2b01a9d7f016add8ba9a90e79ccc46c5ef9dbf15c6a1101d_20261104T142039559816Z.json",
+      "request_fingerprint": "5292c5c4d813cb8f2b01a9d7f016add8ba9a90e79ccc46c5ef9dbf15c6a1101d",
+      "payload_sha256": "137312149daaeeab267890d4e0e0cfcbbbd4d4a6edc855fb7759037347783e15",
+      "record_count": 204,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2023", "reporterCode": "276", "cmdCode": "84", "flowCode": "M", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2023_M_85",
+      "payload_file": "comtrade_trade_b09446ed320b394e343d282cc86ed290d0b93a5f931a68ad73a78c01ac4dd37c_20261104T142042481403Z.json",
+      "request_fingerprint": "b09446ed320b394e343d282cc86ed290d0b93a5f931a68ad73a78c01ac4dd37c",
+      "payload_sha256": "1a28540d1be9e9dfa6626402b0452ad7ebabd8ddec044e1e2f48752c7f40b8e6",
+      "record_count": 204,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2023", "reporterCode": "276", "cmdCode": "85", "flowCode": "M", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2023_M_87",
+      "payload_file": "comtrade_trade_485ac63ebff6b3d9c731317a55f89d564c8da7efbc0aadef266391c8c5caad0f_20261104T142046019308Z.json",
+      "request_fingerprint": "485ac63ebff6b3d9c731317a55f89d564c8da7efbc0aadef266391c8c5caad0f",
+      "payload_sha256": "4aaa06b3bbd90c3a09b026774904acf646bce1be6f2838d13f305d476201e33d",
+      "record_count": 146,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2023", "reporterCode": "276", "cmdCode": "87", "flowCode": "M", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2023_X_84",
+      "payload_file": "comtrade_trade_66d2984ba9c0530b8aaa3bce75000134476043f06b393be2794776c96aa3b5c7_20261104T142048044636Z.json",
+      "request_fingerprint": "66d2984ba9c0530b8aaa3bce75000134476043f06b393be2794776c96aa3b5c7",
+      "payload_sha256": "7b858cd5509f65328b2f545396de219f475ee3a4595715ee2c1dab17de4d88a5",
+      "record_count": 223,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2023", "reporterCode": "276", "cmdCode": "84", "flowCode": "X", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2023_X_85",
+      "payload_file": "comtrade_trade_87245c7a6baea05cfbdeffba01e62a362166290201c9b2eea337d41593d0305d_20261104T142049482564Z.json",
+      "request_fingerprint": "87245c7a6baea05cfbdeffba01e62a362166290201c9b2eea337d41593d0305d",
+      "payload_sha256": "cf1f65e67ab52c33ec4424666994eacd4f84d851dcb06c609e9e6e30cc65b77e",
+      "record_count": 220,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2023", "reporterCode": "276", "cmdCode": "85", "flowCode": "X", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2023_X_87",
+      "payload_file": "comtrade_trade_201a43ed57c8b713eb1bb50565e9809de153cb0a168b922d2f099b5807f48da1_20261104T142056173173Z.json",
+      "request_fingerprint": "201a43ed57c8b713eb1bb50565e9809de153cb0a168b922d2f099b5807f48da1",
+      "payload_sha256": "6ca63d496a9f9d2590a0ab1100a605217b3a293b5c0b60164b5c3ab6527aff42",
+      "record_count": 206,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2023", "reporterCode": "276", "cmdCode": "87", "flowCode": "X", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2024_M_84",
+      "payload_file": "comtrade_trade_a98dc7e7386c4a19c8e72d95d745c58ae6b6c48dc4bb374d84c77b4da0e6cafc_20261104T142057890660Z.json",
+      "request_fingerprint": "a98dc7e7386c4a19c8e72d95d745c58ae6b6c48dc4bb374d84c77b4da0e6cafc",
+      "payload_sha256": "1b4ab2f44f0e75f5c04b3ee2260d7a2c221c89eb1d03ea401b9cb6d9fabd2f69",
+      "record_count": 202,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2024", "reporterCode": "276", "cmdCode": "84", "flowCode": "M", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2024_M_85",
+      "payload_file": "comtrade_trade_45b4fd2e7d200d698df2b51cfae0fee031c29d7f8eeb2fafd22fd332269626b0_20261104T142058883171Z.json",
+      "request_fingerprint": "45b4fd2e7d200d698df2b51cfae0fee031c29d7f8eeb2fafd22fd332269626b0",
+      "payload_sha256": "0d2c57b5e3b593bafea732779bff7d2f14edffc7550bef46b83772c3c39c0df0",
+      "record_count": 211,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2024", "reporterCode": "276", "cmdCode": "85", "flowCode": "M", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2024_M_87",
+      "payload_file": "comtrade_trade_2cb1c3bb83b7fd1c334bdff4934b5e17eaef687439d0906b1534b0636b745628_20261104T142101453515Z.json",
+      "request_fingerprint": "2cb1c3bb83b7fd1c334bdff4934b5e17eaef687439d0906b1534b0636b745628",
+      "payload_sha256": "dff03e224b3ec20cf7813bd4a09fb35747d1a05bb52503ec9a9c14c270310489",
+      "record_count": 143,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2024", "reporterCode": "276", "cmdCode": "87", "flowCode": "M", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2024_X_84",
+      "payload_file": "comtrade_trade_cf41e8360e7ee71ef671e39e8664991d8e327376c2d10e86a98dcf293873c28c_20261104T141229719689Z.json",
+      "request_fingerprint": "cf41e8360e7ee71ef671e39e8664991d8e327376c2d10e86a98dcf293873c28c",
+      "payload_sha256": "d150ec85e1bc695b8febdd9dc1e8243e018f095fee09cbf4af9a3e41769e315b",
+      "record_count": 224,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2024", "reporterCode": "276", "cmdCode": "84", "flowCode": "X", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2024_X_85",
+      "payload_file": "comtrade_trade_5c2afc92f0fbc787c4cddacfe3357d413a2f8ff5c5a8610c6a6808fdd4b74d8d_20261104T142106275243Z.json",
+      "request_fingerprint": "5c2afc92f0fbc787c4cddacfe3357d413a2f8ff5c5a8610c6a6808fdd4b74d8d",
+      "payload_sha256": "7ed47c35996d0d8e6dda116ba6beda19d2f989766f48097c0de173622515ecc7",
+      "record_count": 225,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2024", "reporterCode": "276", "cmdCode": "85", "flowCode": "X", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    },
+    {
+      "partition_id": "2024_X_87",
+      "payload_file": "comtrade_trade_2beeb38ac9fd6fb2e158c989124e20efd0eb2e0748928bc9a2882dea2d705585_20261104T142111657557Z.json",
+      "request_fingerprint": "2beeb38ac9fd6fb2e158c989124e20efd0eb2e0748928bc9a2882dea2d705585",
+      "payload_sha256": "a1faf21fd1737523fb19fdcbd6f9a4f181ac968660455fbef5860b0038b41d9d",
+      "record_count": 204,
+      "request": {"request_kind": "trade", "mode": "authenticated", "endpoint": "https://comtradeapi.un.org/data/v1/get/C/A/HS", "query_parameters": {"period": "2024", "reporterCode": "276", "cmdCode": "87", "flowCode": "X", "maxRecords": 2000, "breakdownMode": "classic", "includeDesc": "true"}}
+    }
+  ]
+}

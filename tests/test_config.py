@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.config import ComtradeSettings, PROJECT_ROOT
+from src.config import ComtradeSettings, PROJECT_ROOT, WarehouseSettings
 
 
 ENVIRONMENT_VARIABLES = [
@@ -12,6 +12,8 @@ ENVIRONMENT_VARIABLES = [
     "COMTRADE_TIMEOUT_SECONDS",
     "COMTRADE_DAILY_REQUEST_BUDGET",
     "COMTRADE_BUDGET_STATE_PATH",
+    "COMTRADE_WAREHOUSE_PATH",
+    "COMTRADE_INGESTION_MANIFEST",
 ]
 
 
@@ -94,3 +96,35 @@ def test_direct_settings_validation(tmp_path: Path) -> None:
             budget_state_path=tmp_path / "state.json",
             daily_request_budget=0,
         )
+
+
+def test_warehouse_settings_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clear_comtrade_environment(monkeypatch)
+
+    settings = WarehouseSettings.from_env(tmp_path / "missing.env")
+
+    assert settings.raw_dir == PROJECT_ROOT / "data" / "raw"
+    assert settings.warehouse_path == (
+        PROJECT_ROOT / "data" / "warehouse" / "trade.duckdb"
+    )
+    assert settings.manifest_path == (
+        PROJECT_ROOT / "config" / "iteration2_manifest.json"
+    )
+    assert settings.sql_dir == PROJECT_ROOT / "sql"
+
+
+def test_warehouse_settings_environment_overrides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clear_comtrade_environment(monkeypatch)
+    monkeypatch.setenv("COMTRADE_RAW_DIR", "custom/raw")
+    monkeypatch.setenv("COMTRADE_WAREHOUSE_PATH", "custom/trade.duckdb")
+    monkeypatch.setenv("COMTRADE_INGESTION_MANIFEST", "custom/manifest.json")
+
+    settings = WarehouseSettings.from_env(tmp_path / "missing.env")
+
+    assert settings.raw_dir == PROJECT_ROOT / "custom" / "raw"
+    assert settings.warehouse_path == PROJECT_ROOT / "custom" / "trade.duckdb"
+    assert settings.manifest_path == PROJECT_ROOT / "custom" / "manifest.json"
